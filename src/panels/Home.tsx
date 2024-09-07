@@ -1,5 +1,6 @@
 import { DragEventHandler, FC, useState } from "react";
 import {
+  Button,
   DropZone,
   File,
   FormItem,
@@ -20,14 +21,40 @@ import {
   Icon28ErrorCircleOutline,
   Icon56CameraOutline,
 } from "@vkontakte/icons";
+import { v4 as uuidv4 } from "uuid"; // Add this import for generating unique IDs
+import { saveAs } from "file-saver"; // Add this import for saving files
+import JSZip from "jszip";
+import convertWebPToPNG from "../utils/convertWebpToPNG";
 
 export interface HomeProps extends NavIdProps {
   fetchedUser?: UserInfo;
 }
 
+interface BlobMetadata {
+  id: string;
+  blob: Blob;
+  name: string;
+}
+
 export const Home: FC<HomeProps> = ({ id }) => {
-  const [blobs, setBlobs] = useState<Blob[]>([]);
+  const [blobs, setBlobs] = useState<BlobMetadata[]>([]);
   const [snackbar, setSnackbar] = useState<React.ReactNode | null>(null);
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files) {
+      const newBlobs = Array.from(files).map((file) => ({
+        id: uuidv4(),
+        blob: file,
+        name: file.name,
+      }));
+      setBlobs((prevBlobs) => [...prevBlobs, ...newBlobs]);
+    }
+  };
+
+  const deleteBlob = (id: string) => {
+    setBlobs((prevBlobs) => prevBlobs.filter((blob) => blob.id !== id));
+  };
 
   const Item = ({ active }: { active: boolean }) => {
     return (
@@ -38,63 +65,12 @@ export const Home: FC<HomeProps> = ({ id }) => {
           />
         </Placeholder.Icon>
         <Placeholder.Header>Быстрая отправка</Placeholder.Header>
-        <Placeholder.Text>
-          Перенесите файл сюда для быстрой отправки. В таком случае изображения
-          будут сжаты.
-        </Placeholder.Text>
       </Placeholder.Container>
     );
   };
 
   const dragOverHandler = (event: { preventDefault: () => void }) => {
     event.preventDefault();
-  };
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-
-    if (files === null) {
-      return;
-    }
-
-    const only_webp_files = Array.from(files).filter(
-      (file) => file.type === "image/webp"
-    );
-
-    if (only_webp_files.length === 0) {
-      setSnackbar(
-        <Snackbar
-          onClose={() => setSnackbar(null)}
-          before={
-            <Icon28ErrorCircleOutline fill="var(--vkui--color_icon_negative)" />
-          }
-        >
-          Нет webp файлов для загрузки
-        </Snackbar>
-      );
-
-      return;
-    }
-
-    if (only_webp_files.length !== files.length) {
-      setSnackbar(
-        <Snackbar
-          onClose={() => setSnackbar(null)}
-          before={
-            <Icon28ErrorCircleOutline fill="var(--vkui--color_icon_negative)" />
-          }
-        >
-          Некоторые файлы не являются webp файлами
-        </Snackbar>
-      );
-    }
-
-    //convert files to blob and store in state
-    const blobs = only_webp_files.map(
-      (file) => new Blob([file], { type: "image/webp" })
-    );
-
-    setBlobs(blobs);
   };
 
   const dropHandler: DragEventHandler<HTMLDivElement> = (event) => {
@@ -109,40 +85,34 @@ export const Home: FC<HomeProps> = ({ id }) => {
     console.table(only_webp_files);
 
     if (only_webp_files.length === 0) {
-      setSnackbar(
-        <Snackbar
-          onClose={() => setSnackbar(null)}
-          before={
-            <Icon28ErrorCircleOutline fill="var(--vkui--color_icon_negative)" />
-          }
-        >
-          Нет webp файлов для загрузки
-        </Snackbar>
-      );
-
+      setSnackbar(renderSnackbar("Нет webp файлов для загрузки"));
       return;
     }
 
     if (only_webp_files.length !== event.dataTransfer.files.length) {
-      setSnackbar(
-        <Snackbar
-          onClose={() => setSnackbar(null)}
-          before={
-            <Icon28ErrorCircleOutline fill="var(--vkui--color_icon_negative)" />
-          }
-        >
-          Некоторые файлы не являются webp файлами
-        </Snackbar>
-      );
+      setSnackbar(renderSnackbar("Некоторые файлы не являются webp файлами"));
     }
 
     //convert files to blob and store in state
-    const blobs = only_webp_files.map(
-      (file) => new Blob([file], { type: "image/webp" })
-    );
+    const newBlobs = only_webp_files.map((file) => ({
+      id: uuidv4(),
+      blob: new Blob([file], { type: "image/webp" }),
+      name: file.name,
+    }));
 
-    setBlobs(blobs);
+    setBlobs(newBlobs);
   };
+
+  const renderSnackbar = (message: string) => (
+    <Snackbar
+      onClose={() => setSnackbar(null)}
+      before={
+        <Icon28ErrorCircleOutline fill="var(--vkui--color_icon_negative)" />
+      }
+    >
+      {message}
+    </Snackbar>
+  );
 
   return (
     <Panel id={id}>
@@ -169,29 +139,47 @@ export const Home: FC<HomeProps> = ({ id }) => {
         </FormItem>
       </Group>
 
-      <Group header={<Header mode="secondary">Ваши webp файлы:</Header>}>
-        {blobs.map((blob, index) => {
-          const url = URL.createObjectURL(blob);
+      {blobs && (
+        <Group header={<Header mode="secondary">Ваши webp файлы:</Header>}>
+          <>
+            <Button
+              size="l"
+              onClick={async () => {
+                const zip = new JSZip();
+                await Promise.allSettled(
+                  blobs.map(async ({ blob, name }) => {
+                    const newBlob = await convertWebPToPNG(blob);
+                    zip.file(name.replace("webp", "png"), newBlob);
+                  })
+                );
 
-          return (
-            <SimpleCell
-              before={<Icon24Camera role="presentation" />}
-              after={
-                <IconButton
-                  label="Удалить"
-                  onClick={() => {
-                    console.log("delete", index);
-                  }}
-                >
-                  <Icon16Delete />
-                </IconButton>
-              }
+                zip.generateAsync({ type: "blob" }).then((content) => {
+                  saveAs(content, "images.zip");
+                });
+              }}
             >
-              <img key={index} src={url} alt={`uploaded ${blob.type}`} />
-            </SimpleCell>
-          );
-        })}
-      </Group>
+              Конвертировать и скачать все в PNG формате
+            </Button>
+            {blobs.map(({ id, blob, name }) => {
+              const url = URL.createObjectURL(blob);
+
+              return (
+                <SimpleCell
+                  key={id}
+                  before={<Icon24Camera role="presentation" />}
+                  after={
+                    <IconButton label="Удалить" onClick={() => deleteBlob(id)}>
+                      <Icon16Delete />
+                    </IconButton>
+                  }
+                >
+                  <img src={url} alt={`uploaded ${name}`} />
+                </SimpleCell>
+              );
+            })}
+          </>
+        </Group>
+      )}
     </Panel>
   );
 };
