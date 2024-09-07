@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import bridge, { BannerAdLocation } from "@vkontakte/vk-bridge";
-import { TBridgeInitializedStatus } from "./useInitializeVKBridge";
+import { TBridgeInitializedStatus } from "./useInitializeVKBrdige";
 
 const useShowVKBannerAds = (vkBridgeStatus: TBridgeInitializedStatus) => {
   useEffect(() => {
