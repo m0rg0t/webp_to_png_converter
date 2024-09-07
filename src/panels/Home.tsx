@@ -198,7 +198,17 @@ export const Home: FC<HomeProps> = ({ id }) => {
                     <ButtonGroup>
                       <IconButton
                         label="Скачать"
-                        onClick={() => saveAs(blob, name)}
+                        onClick={async () => {
+                          const newBlob = await convertWebPToPNG(blob);
+                          if (newBlob) {
+                            const newName = name.replace("webp", "png");
+                            saveAs(newBlob, newName);
+                          } else {
+                            setSnackbar(
+                              renderSnackbar("Ошибка при конвертации файла")
+                            );
+                          }
+                        }}
                       >
                         <Icon16DownloadOutline />
                       </IconButton>
@@ -211,7 +221,7 @@ export const Home: FC<HomeProps> = ({ id }) => {
                     </ButtonGroup>
                   }
                 >
-                  <Div style={{"paddingLeft": "0"}}>
+                  <Div style={{ paddingLeft: "0" }}>
                     <Image
                       src={url}
                       alt={`uploaded ${name}`}

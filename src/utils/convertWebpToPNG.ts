@@ -1,4 +1,4 @@
-function convertWebPToPNG(webpBlob: Blob) {
+function convertWebPToPNG(webpBlob: Blob): Promise<Blob | null> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
