@@ -3,6 +3,7 @@ import {
   Button,
   DropZone,
   File,
+  Flex,
   FormItem,
   Group,
   Header,
@@ -13,10 +14,14 @@ import {
   Placeholder,
   SimpleCell,
   Snackbar,
+  Image,
+  Div,
+  ButtonGroup,
 } from "@vkontakte/vkui";
 import { UserInfo } from "@vkontakte/vk-bridge";
 import {
   Icon16Delete,
+  Icon16DownloadOutline,
   Icon24Camera,
   Icon28ErrorCircleOutline,
   Icon56CameraOutline,
@@ -100,7 +105,7 @@ export const Home: FC<HomeProps> = ({ id }) => {
       name: file.name,
     }));
 
-    setBlobs(newBlobs);
+    setBlobs((prevBlobs) => [...prevBlobs, ...newBlobs]);
   };
 
   const renderSnackbar = (message: string) => (
@@ -127,53 +132,93 @@ export const Home: FC<HomeProps> = ({ id }) => {
             {({ active }) => <Item active={active} />}
           </DropZone>
         </DropZone.Grid>
-        <FormItem top="Загрузите ваше фото">
-          <File
-            before={<Icon24Camera role="presentation" />}
-            onChange={handleFileUpload}
-            size="l"
-            accept={"image/webp"}
-          >
-            Выбрать WEBP файлы
-          </File>
-        </FormItem>
+        <Flex align="center" justify="center">
+          <FormItem top="Загрузите ваше фото">
+            <File
+              before={<Icon24Camera role="presentation" />}
+              onChange={handleFileUpload}
+              size="l"
+              accept={"image/webp"}
+            >
+              Выбрать WEBP файлы
+            </File>
+          </FormItem>
+        </Flex>
       </Group>
 
-      {blobs && (
+      {blobs.length > 0 && (
         <Group header={<Header mode="secondary">Ваши webp файлы:</Header>}>
           <>
-            <Button
-              size="l"
-              onClick={async () => {
-                const zip = new JSZip();
-                await Promise.allSettled(
-                  blobs.map(async ({ blob, name }) => {
-                    const newBlob = await convertWebPToPNG(blob);
-                    zip.file(name.replace("webp", "png"), newBlob);
-                  })
-                );
+            <Div>
+              <Flex align="center" justify="center">
+                <ButtonGroup mode="vertical" stretched={true}>
+                  <Button
+                    size="l"
+                    onClick={async () => {
+                      try {
+                        const zip = new JSZip();
+                        await Promise.allSettled(
+                          blobs.map(async ({ blob, name }) => {
+                            const newBlob = await convertWebPToPNG(blob);
+                            zip.file(name.replace("webp", "png"), newBlob);
+                          })
+                        );
 
-                zip.generateAsync({ type: "blob" }).then((content) => {
-                  saveAs(content, "images.zip");
-                });
-              }}
-            >
-              Конвертировать и скачать все в PNG формате
-            </Button>
+                        zip.generateAsync({ type: "blob" }).then((content) => {
+                          saveAs(content, "images.zip");
+                        });
+                      } catch (error) {
+                        console.error(error);
+                        setSnackbar(renderSnackbar("Ошибка при конвертации"));
+                      }
+                    }}
+                  >
+                    Скачать все
+                  </Button>
+                  <Button
+                    appearance="negative"
+                    size="l"
+                    onClick={() => {
+                      setBlobs([]);
+                    }}
+                  >
+                    Удалить все
+                  </Button>
+                </ButtonGroup>
+              </Flex>
+            </Div>
             {blobs.map(({ id, blob, name }) => {
               const url = URL.createObjectURL(blob);
 
               return (
                 <SimpleCell
                   key={id}
-                  before={<Icon24Camera role="presentation" />}
+                  // before={<Icon24Camera role="presentation" />}
                   after={
-                    <IconButton label="Удалить" onClick={() => deleteBlob(id)}>
-                      <Icon16Delete />
-                    </IconButton>
+                    <ButtonGroup>
+                      <IconButton
+                        label="Скачать"
+                        onClick={() => saveAs(blob, name)}
+                      >
+                        <Icon16DownloadOutline />
+                      </IconButton>
+                      <IconButton
+                        label="Удалить"
+                        onClick={() => deleteBlob(id)}
+                      >
+                        <Icon16Delete />
+                      </IconButton>
+                    </ButtonGroup>
                   }
                 >
-                  <img src={url} alt={`uploaded ${name}`} />
+                  <Div style={{"paddingLeft": "0"}}>
+                    <Image
+                      src={url}
+                      alt={`uploaded ${name}`}
+                      widthSize={"100%"}
+                      heightSize={"100%"}
+                    />
+                  </Div>
                 </SimpleCell>
               );
             })}
