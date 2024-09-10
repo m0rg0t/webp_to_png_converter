@@ -1,4 +1,4 @@
-import { DragEventHandler, FC, useState } from "react";
+import { DragEventHandler, FC, useRef, useState } from "react";
 import {
   Button,
   DropZone,
@@ -39,21 +39,48 @@ interface BlobMetadata {
   id: string;
   blob: Blob;
   name: string;
+  pngBlob: Blob | null;
+  webpName: string;
 }
 
 export const Home: FC<HomeProps> = ({ id }) => {
   const [blobs, setBlobs] = useState<BlobMetadata[]>([]);
   const [snackbar, setSnackbar] = useState<React.ReactNode | null>(null);
 
+  const filesUploadRef = useRef<HTMLInputElement>(null); // Declare the filesUploadRef variable
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
+
     if (files) {
-      const newBlobs = Array.from(files).map((file) => ({
-        id: uuidv4(),
-        blob: file,
-        name: file.name,
-      }));
-      setBlobs((prevBlobs) => [...prevBlobs, ...newBlobs]);
+      const webpFiles = Array.from(files).filter(
+        (file) => file.type === "image/webp"
+      );
+
+      if (webpFiles.length === 0) {
+        setSnackbar(renderSnackbar("Нет webp файлов для загрузки"));
+        return;
+      }
+
+      if (webpFiles.length !== files.length) {
+        setSnackbar(renderSnackbar("Некоторые файлы не являются webp файлами"));
+      }
+
+      const newBlobs = webpFiles.map(async (file) => {
+        return {
+          id: uuidv4(),
+          blob: file,
+          pngBlob: await convertWebPToPNG(file),
+          name: file.name,
+          webpName: file.name.replace("webp", "png"),
+        };
+      });
+
+      Promise.all(newBlobs).then((resolvedBlobs) => {
+        setBlobs((prevBlobs) => [...prevBlobs, ...resolvedBlobs]);
+
+        filesUploadRef.current!.value = "";
+      });
     }
   };
 
@@ -99,13 +126,19 @@ export const Home: FC<HomeProps> = ({ id }) => {
     }
 
     //convert files to blob and store in state
-    const newBlobs = only_webp_files.map((file) => ({
+    const newBlobs = only_webp_files.map(async (file) => ({
       id: uuidv4(),
       blob: new Blob([file], { type: "image/webp" }),
+      pngBlob: await convertWebPToPNG(file),
       name: file.name,
+      webpName: file.name.replace("webp", "png"),
     }));
 
-    setBlobs((prevBlobs) => [...prevBlobs, ...newBlobs]);
+    Promise.all(newBlobs).then((resolvedBlobs) => {
+      setBlobs((prevBlobs) => [...prevBlobs, ...resolvedBlobs]);
+
+      filesUploadRef.current!.value = "";
+    });
   };
 
   const renderSnackbar = (message: string) => (
@@ -139,6 +172,7 @@ export const Home: FC<HomeProps> = ({ id }) => {
               onChange={handleFileUpload}
               size="l"
               accept={"image/webp"}
+              getRef={filesUploadRef}
             >
               Выбрать WEBP файлы
             </File>
@@ -147,7 +181,7 @@ export const Home: FC<HomeProps> = ({ id }) => {
       </Group>
 
       {blobs.length > 0 && (
-        <Group header={<Header mode="secondary">Ваши webp файлы:</Header>}>
+        <Group header={<Header mode="secondary">Ваши PNG файлы:</Header>}>
           <>
             <Div>
               <Flex align="center" justify="center">
@@ -157,12 +191,9 @@ export const Home: FC<HomeProps> = ({ id }) => {
                     onClick={async () => {
                       try {
                         const zip = new JSZip();
-                        await Promise.allSettled(
-                          blobs.map(async ({ blob, name }) => {
-                            const newBlob = await convertWebPToPNG(blob);
-                            zip.file(name.replace("webp", "png"), newBlob);
-                          })
-                        );
+                        blobs.map(({ pngBlob, webpName }) => {
+                          zip.file(webpName, pngBlob);
+                        });
 
                         zip.generateAsync({ type: "blob" }).then((content) => {
                           saveAs(content, "images.zip");
@@ -187,8 +218,8 @@ export const Home: FC<HomeProps> = ({ id }) => {
                 </ButtonGroup>
               </Flex>
             </Div>
-            {blobs.map(({ id, blob, name }) => {
-              const url = URL.createObjectURL(blob);
+            {blobs.map(({ id, webpName, pngBlob, blob }) => {
+              const url = URL.createObjectURL(pngBlob || blob);
 
               return (
                 <SimpleCell
@@ -196,22 +227,11 @@ export const Home: FC<HomeProps> = ({ id }) => {
                   // before={<Icon24Camera role="presentation" />}
                   after={
                     <ButtonGroup>
-                      <IconButton
-                        label="Скачать"
-                        onClick={async () => {
-                          const newBlob = await convertWebPToPNG(blob);
-                          if (newBlob) {
-                            const newName = name.replace("webp", "png");
-                            saveAs(newBlob, newName);
-                          } else {
-                            setSnackbar(
-                              renderSnackbar("Ошибка при конвертации файла")
-                            );
-                          }
-                        }}
-                      >
+                      <a href={url} download={webpName} target="_blank" title={`Скачать ${webpName}`}>
+                      <IconButton label="Скачать">
                         <Icon16DownloadOutline />
                       </IconButton>
+                      </a>
                       <IconButton
                         label="Удалить"
                         onClick={() => deleteBlob(id)}
@@ -224,7 +244,7 @@ export const Home: FC<HomeProps> = ({ id }) => {
                   <Div style={{ paddingLeft: "0" }}>
                     <Image
                       src={url}
-                      alt={`uploaded ${name}`}
+                      alt={`uploaded ${webpName}`}
                       widthSize={"100%"}
                       heightSize={"100%"}
                     />
