@@ -1,4 +1,4 @@
-import { DragEventHandler, FC, useRef, useState } from "react";
+import { DragEventHandler, FC, useEffect, useRef, useState } from "react";
 import {
   Button,
   DropZone,
@@ -13,6 +13,7 @@ import {
   PanelHeader,
   Placeholder,
   SimpleCell,
+  Text,
   Snackbar,
   Image,
   Div,
@@ -34,7 +35,8 @@ import bridge from "@vkontakte/vk-bridge";
 
 export interface HomeProps extends NavIdProps {
   fetchedUser?: UserInfo;
-  isMobile: boolean;
+  isMobileInApp: boolean;
+  isMobileWeb: boolean;
 }
 
 interface BlobMetadata {
@@ -45,7 +47,7 @@ interface BlobMetadata {
   webpName: string;
 }
 
-export const Home: FC<HomeProps> = ({ id, isMobile }) => {
+export const Home: FC<HomeProps> = ({ id, isMobileInApp, isMobileWeb }) => {
   const [blobs, setBlobs] = useState<BlobMetadata[]>([]);
   const [snackbar, setSnackbar] = useState<React.ReactNode | null>(null);
 
@@ -89,6 +91,15 @@ export const Home: FC<HomeProps> = ({ id, isMobile }) => {
   const deleteBlob = (id: string) => {
     setBlobs((prevBlobs) => prevBlobs.filter((blob) => blob.id !== id));
   };
+
+  useEffect(() => {
+    bridge.subscribe(({ detail: { type, data } }) => {
+      if (type === "VKWebAppDownloadFileFailed") {
+        console.error("Download failed", data);
+        setSnackbar(renderSnackbar("Ошибка при скачивании файла"));
+      }
+    });
+  }, []);
 
   const Item = ({ active }: { active: boolean }) => {
     return (
@@ -162,7 +173,7 @@ export const Home: FC<HomeProps> = ({ id, isMobile }) => {
       <Group
         header={<Header mode="secondary">Загрузите ваши WEBP файлы</Header>}
       >
-        {!isMobile && (
+        {!isMobileInApp && !isMobileWeb && (
           <DropZone.Grid>
             <DropZone onDragOver={dragOverHandler} onDrop={dropHandler}>
               {({ active }) => <Item active={active} />}
@@ -190,33 +201,37 @@ export const Home: FC<HomeProps> = ({ id, isMobile }) => {
             <Div>
               <Flex align="center" justify="center">
                 <ButtonGroup mode="vertical" stretched={true}>
-                  <Button
-                    size="l"
-                    onClick={async () => {
-                      try {
-                        const zip = new JSZip();
-                        blobs.map(({ pngBlob, webpName }) => {
-                          zip.file(webpName, pngBlob);
-                        });
+                  {!isMobileWeb && (
+                    <Button
+                      size="l"
+                      onClick={async () => {
+                        try {
+                          const zip = new JSZip();
+                          blobs.map(({ pngBlob, webpName }) => {
+                            zip.file(webpName, pngBlob);
+                          });
 
-                        zip.generateAsync({ type: "blob" }).then((content) => {
-                          if (isMobile) {
-                            bridge.send("VKWebAppDownloadFile", {
-                              url: URL.createObjectURL(content),
-                              filename: "images.zip",
+                          zip
+                            .generateAsync({ type: "blob" })
+                            .then((content) => {
+                              if (isMobileInApp) {
+                                bridge.send("VKWebAppDownloadFile", {
+                                  url: URL.createObjectURL(content),
+                                  filename: "images.zip",
+                                });
+                              } else {
+                                saveAs(content, "images.zip");
+                              }
                             });
-                          } else {
-                            saveAs(content, "images.zip");
-                          }
-                        });
-                      } catch (error) {
-                        console.error(error);
-                        setSnackbar(renderSnackbar("Ошибка при конвертации"));
-                      }
-                    }}
-                  >
-                    Скачать все
-                  </Button>
+                        } catch (error) {
+                          console.error(error);
+                          setSnackbar(renderSnackbar("Ошибка при конвертации"));
+                        }
+                      }}
+                    >
+                      Скачать все
+                    </Button>
+                  )}
                   <Button
                     appearance="negative"
                     size="l"
@@ -228,6 +243,14 @@ export const Home: FC<HomeProps> = ({ id, isMobile }) => {
                   </Button>
                 </ButtonGroup>
               </Flex>
+              {isMobileWeb && (
+                <Text>
+                  Сейчас приложение открыто в режиме мобильного сайта. В этом
+                  режиме может быть затрубнено авто-скачивание изображений. В
+                  этом случае можно зажать конвертированное изображение и
+                  выбрать опцию сохраненния картинки.
+                </Text>
+              )}
             </Div>
             {blobs.map(({ id, webpName, pngBlob, blob }) => {
               const url = URL.createObjectURL(pngBlob || blob);
@@ -238,9 +261,10 @@ export const Home: FC<HomeProps> = ({ id, isMobile }) => {
                   // before={<Icon24Camera role="presentation" />}
                   after={
                     <ButtonGroup>
-                        <IconButton label="Скачать"
+                      <IconButton
+                        label="Скачать"
                         onClick={() => {
-                          if (isMobile) {
+                          if (isMobileInApp) {
                             bridge.send("VKWebAppDownloadFile", {
                               url: URL.createObjectURL(pngBlob || blob),
                               filename: webpName,
@@ -248,9 +272,10 @@ export const Home: FC<HomeProps> = ({ id, isMobile }) => {
                           } else {
                             saveAs(pngBlob || blob, webpName);
                           }
-                        }}>
-                          <Icon16DownloadOutline />
-                        </IconButton>
+                        }}
+                      >
+                        <Icon16DownloadOutline />
+                      </IconButton>
                       <IconButton
                         label="Удалить"
                         onClick={() => deleteBlob(id)}

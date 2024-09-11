@@ -13,14 +13,16 @@ export const App = () => {
   useShowVKBannerAds(vkBridgeStatus);
 
   //check get param vk_platform and if its include words iphone, android, mobile - then its mobile mode
-  const mobileWords = ['iphone', 'android', 'mobile'];
-  const isMobile = mobileWords.some((word) => window.location.search.includes(word));
+  const mobileWords = ['iphone', 'android']; //, 'mobile'];
+  const isMobileInApp = mobileWords.some((word) => window.location.search.includes(word));
+  //mobile_web
+  const isMobileWeb = window.location.search.includes("mobile_web");
 
   return (
     <SplitLayout popout={null}>
       <SplitCol>
         <View activePanel={activePanel}>
-          <Home id="home" isMobile={isMobile} />
+          <Home id="home" isMobileInApp={isMobileInApp} isMobileWeb={isMobileWeb} />
         </View>
       </SplitCol>
     </SplitLayout>
