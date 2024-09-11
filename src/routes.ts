@@ -12,7 +12,7 @@ export const DEFAULT_VIEW = 'default_view';
 
 export const DEFAULT_VIEW_PANELS = {
   HOME: 'home',
-  PERSIK: 'persik',
+  PERSIK: 'home',
 } as const;
 
 export const routes = RoutesConfig.create([

@@ -30,9 +30,11 @@ import { v4 as uuidv4 } from "uuid"; // Add this import for generating unique ID
 import { saveAs } from "file-saver"; // Add this import for saving files
 import JSZip from "jszip";
 import convertWebPToPNG from "../utils/convertWebpToPNG";
+import bridge from "@vkontakte/vk-bridge";
 
 export interface HomeProps extends NavIdProps {
   fetchedUser?: UserInfo;
+  isMobile: boolean;
 }
 
 interface BlobMetadata {
@@ -43,7 +45,7 @@ interface BlobMetadata {
   webpName: string;
 }
 
-export const Home: FC<HomeProps> = ({ id }) => {
+export const Home: FC<HomeProps> = ({ id, isMobile }) => {
   const [blobs, setBlobs] = useState<BlobMetadata[]>([]);
   const [snackbar, setSnackbar] = useState<React.ReactNode | null>(null);
 
@@ -160,11 +162,13 @@ export const Home: FC<HomeProps> = ({ id }) => {
       <Group
         header={<Header mode="secondary">Загрузите ваши WEBP файлы</Header>}
       >
-        <DropZone.Grid>
-          <DropZone onDragOver={dragOverHandler} onDrop={dropHandler}>
-            {({ active }) => <Item active={active} />}
-          </DropZone>
-        </DropZone.Grid>
+        {!isMobile && (
+          <DropZone.Grid>
+            <DropZone onDragOver={dragOverHandler} onDrop={dropHandler}>
+              {({ active }) => <Item active={active} />}
+            </DropZone>
+          </DropZone.Grid>
+        )}
         <Flex align="center" justify="center">
           <FormItem top="Загрузите ваше фото">
             <File
@@ -196,7 +200,14 @@ export const Home: FC<HomeProps> = ({ id }) => {
                         });
 
                         zip.generateAsync({ type: "blob" }).then((content) => {
-                          saveAs(content, "images.zip");
+                          if (isMobile) {
+                            bridge.send("VKWebAppDownloadFile", {
+                              url: URL.createObjectURL(content),
+                              filename: "images.zip",
+                            });
+                          } else {
+                            saveAs(content, "images.zip");
+                          }
                         });
                       } catch (error) {
                         console.error(error);
@@ -227,11 +238,19 @@ export const Home: FC<HomeProps> = ({ id }) => {
                   // before={<Icon24Camera role="presentation" />}
                   after={
                     <ButtonGroup>
-                      <a href={url} download={webpName} target="_blank" title={`Скачать ${webpName}`}>
-                      <IconButton label="Скачать">
-                        <Icon16DownloadOutline />
-                      </IconButton>
-                      </a>
+                        <IconButton label="Скачать"
+                        onClick={() => {
+                          if (isMobile) {
+                            bridge.send("VKWebAppDownloadFile", {
+                              url: URL.createObjectURL(pngBlob || blob),
+                              filename: webpName,
+                            });
+                          } else {
+                            saveAs(pngBlob || blob, webpName);
+                          }
+                        }}>
+                          <Icon16DownloadOutline />
+                        </IconButton>
                       <IconButton
                         label="Удалить"
                         onClick={() => deleteBlob(id)}
