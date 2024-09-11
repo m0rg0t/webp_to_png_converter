@@ -51,6 +51,8 @@ export const Home: FC<HomeProps> = ({ id, isMobileInApp, isMobileWeb }) => {
   const [blobs, setBlobs] = useState<BlobMetadata[]>([]);
   const [snackbar, setSnackbar] = useState<React.ReactNode | null>(null);
 
+  const isMobile = isMobileInApp || isMobileWeb;
+
   const filesUploadRef = useRef<HTMLInputElement>(null); // Declare the filesUploadRef variable
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -173,7 +175,7 @@ export const Home: FC<HomeProps> = ({ id, isMobileInApp, isMobileWeb }) => {
       <Group
         header={<Header mode="secondary">Загрузите ваши WEBP файлы</Header>}
       >
-        {!isMobileInApp && !isMobileWeb && (
+        {!isMobile && (
           <DropZone.Grid>
             <DropZone onDragOver={dragOverHandler} onDrop={dropHandler}>
               {({ active }) => <Item active={active} />}
@@ -201,7 +203,7 @@ export const Home: FC<HomeProps> = ({ id, isMobileInApp, isMobileWeb }) => {
             <Div>
               <Flex align="center" justify="center">
                 <ButtonGroup mode="vertical" stretched={true}>
-                  {!isMobileWeb && (
+                  {!isMobile && (
                     <Button
                       size="l"
                       onClick={async () => {
@@ -243,7 +245,9 @@ export const Home: FC<HomeProps> = ({ id, isMobileInApp, isMobileWeb }) => {
                   </Button>
                 </ButtonGroup>
               </Flex>
-              {isMobileWeb && (
+            </Div>
+            <Div>
+              {isMobile && (
                 <Text>
                   Сейчас приложение открыто в режиме мобильного сайта. В этом
                   режиме может быть затрубнено авто-скачивание изображений. В
@@ -258,24 +262,25 @@ export const Home: FC<HomeProps> = ({ id, isMobileInApp, isMobileWeb }) => {
               return (
                 <SimpleCell
                   key={id}
-                  // before={<Icon24Camera role="presentation" />}
                   after={
                     <ButtonGroup>
-                      <IconButton
-                        label="Скачать"
-                        onClick={() => {
-                          if (isMobileInApp) {
-                            bridge.send("VKWebAppDownloadFile", {
-                              url: URL.createObjectURL(pngBlob || blob),
-                              filename: webpName,
-                            });
-                          } else {
-                            saveAs(pngBlob || blob, webpName);
-                          }
-                        }}
-                      >
-                        <Icon16DownloadOutline />
-                      </IconButton>
+                      {!isMobile && (
+                        <IconButton
+                          label="Скачать"
+                          onClick={() => {
+                            if (isMobileInApp) {
+                              bridge.send("VKWebAppDownloadFile", {
+                                url: URL.createObjectURL(pngBlob || blob),
+                                filename: webpName,
+                              });
+                            } else {
+                              saveAs(pngBlob || blob, webpName);
+                            }
+                          }}
+                        >
+                          <Icon16DownloadOutline />
+                        </IconButton>
+                      )}
                       <IconButton
                         label="Удалить"
                         onClick={() => deleteBlob(id)}
@@ -286,12 +291,19 @@ export const Home: FC<HomeProps> = ({ id, isMobileInApp, isMobileWeb }) => {
                   }
                 >
                   <Div style={{ paddingLeft: "0" }}>
-                    <Image
-                      src={url}
-                      alt={`uploaded ${webpName}`}
-                      widthSize={"100%"}
-                      heightSize={"100%"}
-                    />
+                    <a
+                      title={webpName}
+                      href={URL.createObjectURL(pngBlob || blob)}
+                      target="_blank"
+                      download={webpName}
+                    >
+                      <Image
+                        src={url}
+                        alt={`uploaded ${webpName}`}
+                        widthSize={"100%"}
+                        heightSize={"100%"}
+                      />
+                    </a>
                   </Div>
                 </SimpleCell>
               );
