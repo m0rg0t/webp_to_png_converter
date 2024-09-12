@@ -32,6 +32,7 @@ import { saveAs } from "file-saver"; // Add this import for saving files
 import JSZip from "jszip";
 import convertWebPToPNG from "../utils/convertWebpToPNG";
 import bridge from "@vkontakte/vk-bridge";
+import NotAvailable from "./NotAvailable";
 
 export interface HomeProps extends NavIdProps {
   fetchedUser?: UserInfo;
@@ -166,6 +167,10 @@ export const Home: FC<HomeProps> = ({ id, isMobileInApp, isMobileWeb }) => {
       {message}
     </Snackbar>
   );
+
+  if (isMobile) {
+    return <NotAvailable id={id} />
+  }
 
   return (
     <Panel id={id}>
