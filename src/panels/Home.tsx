@@ -169,7 +169,7 @@ export const Home: FC<HomeProps> = ({ id, isMobileInApp, isMobileWeb }) => {
   );
 
   if (isMobile) {
-    return <NotAvailable id={id} />
+    return <NotAvailable id={id} />;
   }
 
   return (
@@ -193,6 +193,7 @@ export const Home: FC<HomeProps> = ({ id, isMobileInApp, isMobileWeb }) => {
               before={<Icon24Camera role="presentation" />}
               onChange={handleFileUpload}
               size="l"
+              multiple={true}
               accept={"image/webp"}
               getRef={filesUploadRef}
             >
@@ -255,9 +256,9 @@ export const Home: FC<HomeProps> = ({ id, isMobileInApp, isMobileWeb }) => {
               {isMobile && (
                 <Text>
                   Сейчас приложение открыто в режиме мобильного сайта. В этом
-                  режиме может быть затрубнено авто-скачивание изображений. В
+                  режиме может быть затруднено авто-скачивание изображений. В
                   этом случае можно зажать конвертированное изображение и
-                  выбрать опцию сохраненния картинки.
+                  выбрать опцию сохранения картинки.
                 </Text>
               )}
             </Div>
