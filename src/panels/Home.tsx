@@ -124,13 +124,15 @@ export const Home: FC<HomeProps> = ({ id, isMobileInApp, isMobileWeb }) => {
   const dropHandler: DragEventHandler<HTMLDivElement> = (event) => {
     event.preventDefault();
 
-    console.table(event.dataTransfer.files);
+    umami.track('Drop files');
+
+    //console.table(event.dataTransfer.files);
 
     const only_webp_files = Array.from(event.dataTransfer.files).filter(
       (file) => file.type === "image/webp"
     );
 
-    console.table(only_webp_files);
+    //console.table(only_webp_files);
 
     if (only_webp_files.length === 0) {
       setSnackbar(renderSnackbar("Нет webp файлов для загрузки"));
@@ -193,6 +195,7 @@ export const Home: FC<HomeProps> = ({ id, isMobileInApp, isMobileWeb }) => {
               before={<Icon24Camera role="presentation" />}
               onChange={handleFileUpload}
               size="l"
+              data-umami-event="Upload file"
               multiple={true}
               accept={"image/webp"}
               getRef={filesUploadRef}
@@ -222,6 +225,7 @@ export const Home: FC<HomeProps> = ({ id, isMobileInApp, isMobileWeb }) => {
                           zip
                             .generateAsync({ type: "blob" })
                             .then((content) => {
+                              umami.track('Download all');
                               if (isMobileInApp) {
                                 bridge.send("VKWebAppDownloadFile", {
                                   url: URL.createObjectURL(content),
@@ -274,6 +278,7 @@ export const Home: FC<HomeProps> = ({ id, isMobileInApp, isMobileWeb }) => {
                         <IconButton
                           label="Скачать"
                           onClick={() => {
+                            umami.track('Save one file');
                             if (isMobileInApp) {
                               bridge.send("VKWebAppDownloadFile", {
                                 url: URL.createObjectURL(pngBlob || blob),
