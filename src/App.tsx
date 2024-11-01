@@ -5,6 +5,7 @@ import {Home} from './panels';
 import {DEFAULT_VIEW_PANELS} from './routes';
 import useInitializeVKBridge from './utils/useInitializeVKBrdige';
 import useShowVKBannerAds from './utils/useVKShowBannerAd';
+import './main.css';
 
 export const App = () => {
   const { panel: activePanel = DEFAULT_VIEW_PANELS.HOME } = useActiveVkuiLocation();
