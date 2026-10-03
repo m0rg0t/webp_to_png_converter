@@ -9,6 +9,8 @@ const useVKShowOnboarding = (vkBridgeStatus: TBridgeInitializedStatus) => {
     if (vkBridgeStatus) {
       const isOnboardingShown = localStorage.getItem("isOnboardingShown");
       if (!isOnboardingShown) {
+        // This legacy hook mirrors a browser-storage value into component state.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsOnboardingShown(true);
         localStorage.setItem("isOnboardingShown", "true");
 

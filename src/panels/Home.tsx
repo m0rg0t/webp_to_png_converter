@@ -1,38 +1,11 @@
-import { DragEventHandler, FC, useEffect, useRef, useState } from "react";
-import {
-  Button,
-  DropZone,
-  File,
-  Flex,
-  FormItem,
-  Group,
-  Header,
-  IconButton,
-  NavIdProps,
-  Panel,
-  PanelHeader,
-  Placeholder,
-  SimpleCell,
-  Text,
-  Snackbar,
-  Image,
-  Div,
-  ButtonGroup,
-} from "@vkontakte/vkui";
-import { UserInfo } from "@vkontakte/vk-bridge";
-import {
-  Icon16Delete,
-  Icon16DownloadOutline,
-  Icon24Camera,
-  Icon28ErrorCircleOutline,
-  Icon56CameraOutline,
-} from "@vkontakte/icons";
-import { v4 as uuidv4 } from "uuid"; // Add this import for generating unique IDs
-import { saveAs } from "file-saver"; // Add this import for saving files
-import JSZip from "jszip";
-import convertWebPToPNG from "../utils/convertWebpToPNG";
-import bridge from "@vkontakte/vk-bridge";
-import NotAvailable from "./NotAvailable";
+import { type FC, useEffect, useRef, useState } from 'react';
+import { Button, ButtonGroup, Div, DropZone, File, Flex, FormItem, Group, Header, IconButton, Image, type NavIdProps, Panel, PanelHeader, Placeholder, SimpleCell } from '@vkontakte/vkui';
+import type { UserInfo } from '@vkontakte/vk-bridge';
+import { Icon16Delete, Icon16DownloadOutline, Icon24Camera, Icon56CameraOutline } from '@vkontakte/icons';
+import { saveAs } from 'file-saver';
+import JSZip from 'jszip';
+import { appendUniqueImages, convertBatch, type ConvertedImage } from '../utils/convertBatch';
+import NotAvailable from './NotAvailable';
 
 export interface HomeProps extends NavIdProps {
   fetchedUser?: UserInfo;
@@ -40,288 +13,94 @@ export interface HomeProps extends NavIdProps {
   isMobileWeb: boolean;
 }
 
-interface BlobMetadata {
-  id: string;
-  blob: Blob;
-  name: string;
-  pngBlob: Blob | null;
-  webpName: string;
+function ImageResult({ image, onDelete }: { image: ConvertedImage; onDelete: () => void }) {
+  const [url, setUrl] = useState<string>();
+  useEffect(() => {
+    const next = URL.createObjectURL(image.blob);
+    // The URL belongs to this mounted result, never to a render or a discarded batch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUrl(next);
+    return () => URL.revokeObjectURL(next);
+  }, [image.blob]);
+  return <SimpleCell after={<ButtonGroup>
+    <IconButton aria-label={`Скачать ${image.name}`} onClick={() => saveAs(image.blob, image.name)}><Icon16DownloadOutline /></IconButton>
+    <IconButton aria-label={`Удалить ${image.name}`} onClick={onDelete}><Icon16Delete /></IconButton>
+  </ButtonGroup>}>
+    <Div style={{ paddingLeft: 0 }}>
+      <a href={url} download={image.name} title={image.name}>
+        <Image src={url} alt={image.name} widthSize="100%" heightSize="100%" />
+      </a>
+    </Div>
+  </SimpleCell>;
 }
 
 export const Home: FC<HomeProps> = ({ id, isMobileInApp, isMobileWeb }) => {
-  const [blobs, setBlobs] = useState<BlobMetadata[]>([]);
-  const [snackbar, setSnackbar] = useState<React.ReactNode | null>(null);
-
-  const isMobile = isMobileInApp || isMobileWeb;
-
-  const filesUploadRef = useRef<HTMLInputElement>(null); // Declare the filesUploadRef variable
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-
-    if (files) {
-      const webpFiles = Array.from(files).filter(
-        (file) => file.type === "image/webp"
-      );
-
-      if (webpFiles.length === 0) {
-        setSnackbar(renderSnackbar("Нет webp файлов для загрузки"));
-        return;
-      }
-
-      if (webpFiles.length !== files.length) {
-        setSnackbar(renderSnackbar("Некоторые файлы не являются webp файлами"));
-      }
-
-      const newBlobs = webpFiles.map(async (file) => {
-        return {
-          id: uuidv4(),
-          blob: file,
-          pngBlob: await convertWebPToPNG(file),
-          name: file.name,
-          webpName: file.name.replace("webp", "png"),
-        };
-      });
-
-      Promise.all(newBlobs).then((resolvedBlobs) => {
-        setBlobs((prevBlobs) => [...prevBlobs, ...resolvedBlobs]);
-
-        filesUploadRef.current!.value = "";
-      });
-    }
-  };
-
-  const deleteBlob = (id: string) => {
-    setBlobs((prevBlobs) => prevBlobs.filter((blob) => blob.id !== id));
-  };
-
+  const [images, setImages] = useState<ConvertedImage[]>([]);
+  const [message, setMessage] = useState('');
+  const [pending, setPending] = useState(0);
+  const active = useRef(false);
+  const generation = useRef(0);
   useEffect(() => {
-    bridge.subscribe(({ detail: { type, data } }) => {
-      if (type === "VKWebAppDownloadFileFailed") {
-        console.error("Download failed", data);
-        setSnackbar(renderSnackbar("Ошибка при скачивании файла"));
-      }
-    });
+    active.current = true;
+    return () => { active.current = false; generation.current += 1; };
   }, []);
 
-  const Item = ({ active }: { active: boolean }) => {
-    return (
-      <Placeholder.Container>
-        <Placeholder.Icon>
-          <Icon56CameraOutline
-            fill={active ? "var(--vkui--color_icon_accent)" : undefined}
-          />
-        </Placeholder.Icon>
-        <Placeholder.Header>Быстрая отправка</Placeholder.Header>
-      </Placeholder.Container>
-    );
-  };
-
-  const dragOverHandler = (event: { preventDefault: () => void }) => {
-    event.preventDefault();
-  };
-
-  const dropHandler: DragEventHandler<HTMLDivElement> = (event) => {
-    event.preventDefault();
-
-    umami.track('Drop files');
-
-    //console.table(event.dataTransfer.files);
-
-    const only_webp_files = Array.from(event.dataTransfer.files).filter(
-      (file) => file.type === "image/webp"
-    );
-
-    //console.table(only_webp_files);
-
-    if (only_webp_files.length === 0) {
-      setSnackbar(renderSnackbar("Нет webp файлов для загрузки"));
-      return;
+  async function addFiles(files: File[]) {
+    const request = generation.current;
+    setPending((count) => count + 1);
+    setMessage('');
+    try {
+      const result = await convertBatch(files);
+      if (!active.current || request !== generation.current) return;
+      setImages((previous) => appendUniqueImages(previous, result.images));
+      if (result.failed) setMessage(`Не удалось прочитать WEBP файлов: ${result.failed}. Остальные файлы готовы.`);
+      else if (result.rejected) setMessage('Некоторые файлы не являются WEBP файлами');
+      else if (!result.images.length) setMessage('Нет WEBP файлов для загрузки');
+    } catch {
+      if (active.current && request === generation.current) setMessage('Не удалось обработать файлы. Попробуйте снова.');
+    } finally {
+      if (active.current && request === generation.current) setPending((count) => count - 1);
     }
-
-    if (only_webp_files.length !== event.dataTransfer.files.length) {
-      setSnackbar(renderSnackbar("Некоторые файлы не являются webp файлами"));
-    }
-
-    //convert files to blob and store in state
-    const newBlobs = only_webp_files.map(async (file) => ({
-      id: uuidv4(),
-      blob: new Blob([file], { type: "image/webp" }),
-      pngBlob: await convertWebPToPNG(file),
-      name: file.name,
-      webpName: file.name.replace("webp", "png"),
-    }));
-
-    Promise.all(newBlobs).then((resolvedBlobs) => {
-      setBlobs((prevBlobs) => [...prevBlobs, ...resolvedBlobs]);
-
-      filesUploadRef.current!.value = "";
-    });
-  };
-
-  const renderSnackbar = (message: string) => (
-    <Snackbar
-      onClose={() => setSnackbar(null)}
-      before={
-        <Icon28ErrorCircleOutline fill="var(--vkui--color_icon_negative)" />
-      }
-    >
-      {message}
-    </Snackbar>
-  );
-
-  if (isMobile) {
-    return <NotAvailable id={id} />;
   }
 
-  return (
-    <Panel id={id}>
-      <PanelHeader>WEBP в PNG конвертер</PanelHeader>
-      {snackbar}
+  async function downloadAll() {
+    try {
+      const zip = new JSZip();
+      images.forEach((image) => zip.file(image.name, image.blob));
+      const archive = await zip.generateAsync({ type: 'blob' });
+      if (active.current) saveAs(archive, 'images.zip');
+    } catch {
+      if (active.current) setMessage('Не удалось создать ZIP. Попробуйте снова.');
+    }
+  }
 
-      <Group
-        header={<Header mode="secondary">Загрузите ваши WEBP файлы</Header>}
-      >
-        {!isMobile && (
-          <DropZone.Grid>
-            <DropZone onDragOver={dragOverHandler} onDrop={dropHandler}>
-              {({ active }) => <Item active={active} />}
-            </DropZone>
-          </DropZone.Grid>
-        )}
-        <Flex align="center" justify="center">
-          <FormItem top="Загрузите ваше фото">
-            <File
-              before={<Icon24Camera role="presentation" />}
-              onChange={handleFileUpload}
-              size="l"
-              data-umami-event="Upload file"
-              multiple={true}
-              accept={"image/webp"}
-              getRef={filesUploadRef}
-            >
-              Выбрать WEBP файлы
-            </File>
-          </FormItem>
-        </Flex>
-      </Group>
-
-      {blobs.length > 0 && (
-        <Group header={<Header mode="secondary">Ваши PNG файлы:</Header>}>
-          <>
-            <Div>
-              <Flex align="center" justify="center">
-                <ButtonGroup mode="vertical" stretched={true}>
-                  {!isMobile && (
-                    <Button
-                      size="l"
-                      onClick={async () => {
-                        try {
-                          const zip = new JSZip();
-                          blobs.map(({ pngBlob, webpName }) => {
-                            zip.file(webpName, pngBlob);
-                          });
-
-                          zip
-                            .generateAsync({ type: "blob" })
-                            .then((content) => {
-                              umami.track('Download all');
-                              if (isMobileInApp) {
-                                bridge.send("VKWebAppDownloadFile", {
-                                  url: URL.createObjectURL(content),
-                                  filename: "images.zip",
-                                });
-                              } else {
-                                saveAs(content, "images.zip");
-                              }
-                            });
-                        } catch (error) {
-                          console.error(error);
-                          setSnackbar(renderSnackbar("Ошибка при конвертации"));
-                        }
-                      }}
-                    >
-                      Скачать все
-                    </Button>
-                  )}
-                  <Button
-                    appearance="negative"
-                    size="l"
-                    onClick={() => {
-                      setBlobs([]);
-                    }}
-                  >
-                    Удалить все
-                  </Button>
-                </ButtonGroup>
-              </Flex>
-            </Div>
-            <Div>
-              {isMobile && (
-                <Text>
-                  Сейчас приложение открыто в режиме мобильного сайта. В этом
-                  режиме может быть затруднено авто-скачивание изображений. В
-                  этом случае можно зажать конвертированное изображение и
-                  выбрать опцию сохранения картинки.
-                </Text>
-              )}
-            </Div>
-            {blobs.map(({ id, webpName, pngBlob, blob }) => {
-              const url = URL.createObjectURL(pngBlob || blob);
-
-              return (
-                <SimpleCell
-                  key={id}
-                  after={
-                    <ButtonGroup>
-                      {!isMobile && (
-                        <IconButton
-                          label="Скачать"
-                          onClick={() => {
-                            umami.track('Save one file');
-                            if (isMobileInApp) {
-                              bridge.send("VKWebAppDownloadFile", {
-                                url: URL.createObjectURL(pngBlob || blob),
-                                filename: webpName,
-                              });
-                            } else {
-                              saveAs(pngBlob || blob, webpName);
-                            }
-                          }}
-                        >
-                          <Icon16DownloadOutline />
-                        </IconButton>
-                      )}
-                      <IconButton
-                        label="Удалить"
-                        onClick={() => deleteBlob(id)}
-                      >
-                        <Icon16Delete />
-                      </IconButton>
-                    </ButtonGroup>
-                  }
-                >
-                  <Div style={{ paddingLeft: "0" }}>
-                    <a
-                      title={webpName}
-                      href={URL.createObjectURL(pngBlob || blob)}
-                      target="_blank"
-                      download={webpName}
-                    >
-                      <Image
-                        src={url}
-                        alt={`uploaded ${webpName}`}
-                        widthSize={"100%"}
-                        heightSize={"100%"}
-                      />
-                    </a>
-                  </Div>
-                </SimpleCell>
-              );
-            })}
-          </>
-        </Group>
-      )}
-    </Panel>
-  );
+  if (isMobileInApp || isMobileWeb) return <NotAvailable id={id} />;
+  return <Panel id={id}>
+    <PanelHeader>WEBP в PNG конвертер</PanelHeader>
+    {message && <Div role="alert">{message}</Div>}
+    {pending > 0 && <Div role="status">Конвертируем файлы…</Div>}
+    <Group header={<Header>Загрузите ваши WEBP файлы</Header>}>
+      <DropZone.Grid><DropZone onDragOver={(event) => event.preventDefault()} onDrop={(event) => {
+        event.preventDefault(); void addFiles(Array.from(event.dataTransfer.files));
+      }}>{({ active: dragging }) => <Placeholder.Container><Placeholder.Icon>
+        <Icon56CameraOutline fill={dragging ? 'var(--vkui--color_icon_accent)' : undefined} />
+      </Placeholder.Icon><Placeholder.Title>Быстрая отправка</Placeholder.Title></Placeholder.Container>}</DropZone></DropZone.Grid>
+      <Flex align="center" justify="center"><FormItem top="Загрузите ваше фото">
+        <File before={<Icon24Camera role="presentation" />} size="l" multiple accept="image/webp" onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
+          event.target.value = '';
+          void addFiles(files);
+        }}>Выбрать WEBP файлы</File>
+      </FormItem></Flex>
+    </Group>
+    {(images.length > 0 || pending > 0) && <Group header={<Header>Ваши PNG файлы:</Header>}>
+      <Div><ButtonGroup mode="vertical" stretched>
+        <Button size="l" disabled={!images.length} onClick={() => void downloadAll()}>Скачать все</Button>
+        <Button appearance="negative" size="l" onClick={() => {
+          generation.current += 1; setImages([]); setPending(0); setMessage('');
+        }}>Удалить все</Button>
+      </ButtonGroup></Div>
+      {images.map((image) => <ImageResult key={image.id} image={image} onDelete={() => setImages((previous) => previous.filter((entry) => entry.id !== image.id))} />)}
+    </Group>}
+  </Panel>;
 };

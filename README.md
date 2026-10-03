@@ -53,3 +53,10 @@ yarn run deploy
 [Dev портал разработчиков](https://dev.vk.com/ru)  
 [Пример мини приложения](https://dev.vk.com/ru/mini-apps/examples/shop)  
 [Если столкнулись с проблемами](https://github.com/VKCOM/create-vk-mini-app/issues)
+
+## Maintenance checks
+
+Use Node24 LTS and `npm ci --no-audit --ignore-scripts`, then `npm run check`.
+`npm run test:browser` runs synthetic local-image journeys with an explicit
+serve-only Bridge mock. Production builds retain the real SDK. See
+[verification and native-client limitations](docs/maintenance-validation.md).
