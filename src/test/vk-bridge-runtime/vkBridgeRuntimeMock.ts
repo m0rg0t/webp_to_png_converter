@@ -69,6 +69,13 @@ const send = async (
   rejectForScenario(method);
 
   switch (method) {
+    case 'VKWebAppSetLocation':
+    case 'VKWebAppSetSwipeSettings':
+    case 'VKWebAppEnableSwipeBack':
+    case 'VKWebAppDisableSwipeBack':
+      return { result: true };
+    case 'VKWebAppGetConfig':
+      return { appearance: scenario === 'dark' ? 'dark' : 'light', scheme: scenario === 'dark' ? 'space_gray' : 'client_light', insets: { top: 0, right: 0, bottom: 0, left: 0 } };
     case 'VKWebAppInit':
       queueMicrotask(() =>
         emit('VKWebAppUpdateConfig', {
@@ -179,6 +186,11 @@ export const vkBridgeMockController = {
 };
 
 const supportedMethods = new Set([
+  'VKWebAppSetLocation',
+  'VKWebAppSetSwipeSettings',
+  'VKWebAppEnableSwipeBack',
+  'VKWebAppDisableSwipeBack',
+  'VKWebAppGetConfig',
   'VKWebAppInit',
   'VKWebAppGetUserInfo',
   'VKWebAppGetLaunchParams',
@@ -215,6 +227,13 @@ const bridge = {
 if (typeof window !== 'undefined') {
   Object.assign(window, { __VK_BRIDGE_MOCK__: vkBridgeMockController });
 }
+
+export const parseURLSearchParamsForGetLaunchParams = (search: string): Record<string, unknown> => {
+  const params = new URLSearchParams(search);
+  const result = Object.fromEntries(params.entries());
+  if (!('vk_scheme' in result)) result.vk_scheme = params.get('vk_mock') === 'dark' ? 'space_gray' : 'client_light';
+  return result;
+};
 
 export default bridge;
 

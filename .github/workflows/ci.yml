@@ -52,5 +52,5 @@ jobs:
         run: |
           docker run --detach --name webp-smoke --publish 127.0.0.1:8080:80 webp-maintenance
           trap 'docker rm -f webp-smoke' EXIT
-          curl --retry 10 --retry-connrefused --retry-delay 1 --fail http://127.0.0.1:8080/ -o /tmp/webp.html
+          curl --retry 10 --retry-all-errors --retry-delay 1 --max-time 5 --fail http://127.0.0.1:8080/ -o /tmp/webp.html
           node -e "const fs=require('fs'); const html=fs.readFileSync('/tmp/webp.html','utf8'); if (!html.includes('<div id=\"root\">') || !html.includes('./assets/')) throw Error('Missing production app');"
