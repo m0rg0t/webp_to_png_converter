@@ -1,0 +1,56 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci --no-audit --ignore-scripts
+      - run: npm run check
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --no-audit --ignore-scripts
+      - run: npx --no-install playwright install --with-deps chromium
+      - run: npm run test:browser
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: browser-evidence
+          path: test-results/
+          retention-days: 7
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build -t webp-maintenance .
+      - run: docker run --rm webp-maintenance nginx -t
+      - name: Serve the production app locally
+        run: |
+          docker run --detach --name webp-smoke --publish 127.0.0.1:8080:80 webp-maintenance
+          trap 'docker rm -f webp-smoke' EXIT
+          curl --retry 10 --retry-connrefused --retry-delay 1 --fail http://127.0.0.1:8080/ -o /tmp/webp.html
+          node -e "const fs=require('fs'); const html=fs.readFileSync('/tmp/webp.html','utf8'); if (!html.includes('<div id=\"root\">') || !html.includes('./assets/')) throw Error('Missing production app');"

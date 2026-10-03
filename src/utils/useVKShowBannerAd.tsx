@@ -1,14 +1,13 @@
 import { useEffect } from "react";
-import bridge, { BannerAdLocation } from "@vkontakte/vk-bridge";
+import bridge from "@vkontakte/vk-bridge";
 import { TBridgeInitializedStatus } from "./useInitializeVKBrdige";
 
 const useShowVKBannerAds = (vkBridgeStatus: TBridgeInitializedStatus) => {
   useEffect(() => {
     if (vkBridgeStatus === "INITIALIZED") {
-      bridge.send("VKWebAppInit").then(() => {
-        bridge
+      void bridge
           .send("VKWebAppShowBannerAd", {
-            banner_location: BannerAdLocation.BOTTOM,
+            banner_location: "bottom",
           })
           .then((data) => {
             if (data.result) {
@@ -20,7 +19,6 @@ const useShowVKBannerAds = (vkBridgeStatus: TBridgeInitializedStatus) => {
             // Ошибка
             console.log(error);
           });
-      });
     }
   }, [vkBridgeStatus]);
 };
